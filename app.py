@@ -7,6 +7,14 @@ from PIL import Image as PILImage
 from rembg import remove, new_session
 import streamlit as st
 
+# 事前に軽く1回だけ使ってモデルをキャッシュさせる
+def preload_u2net_model():
+    dummy = PILImage.new("RGB", (10, 10), (255, 255, 255))
+    session = new_session("u2net")
+    remove(dummy, session=session)
+
+preload_u2net_model()
+
 # === 処理関数 ===
 def adjust(image, alpha, gamma):
     dst = alpha * image
