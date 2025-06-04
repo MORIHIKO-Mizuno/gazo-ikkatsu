@@ -57,7 +57,7 @@ def Justification_func(image, top_padding, bottom_padding):
 # === Streamlit UI ===
 st.title("画像一括処理アプリ")
 
-uploaded_files = st.file_uploader("画像を複数選択してください", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_files = st.file_uploader("画像を1枚以上選択してください", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
 
 col1, col2 = st.columns(2)
 with col1:
@@ -84,9 +84,9 @@ if uploaded_files:
     adjusted = adjust_beta(image[:, :, :3], contrast)
     adjusted = adjust(adjusted, brightness, gamma)
     image_out = np.dstack((adjusted, image[:, :, 3]))
-    st.image(image_out, caption="処理済み画像", use_column_width=True)
+    st.image(image_out, caption="処理済み画像", use_container_width=True)
 
-    if st.button("すべての画像を処理してダウンロード"):
+    if st.button("すべての画像を処理"):
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zf:
             for file in uploaded_files:
