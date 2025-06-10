@@ -80,8 +80,13 @@ top_padding = st.sidebar.slider("上パディング (%)", 0, 100, 25, 5)
 bottom_padding = st.sidebar.slider("下パディング (%)", 0, 100, 25, 5)
 
 if uploaded_files:
-    preview_file = uploaded_files[0]
-    preview_image = np.array(PILImage.open(preview_file).convert("RGBA"))
+    # Cache uploaded file bytes to allow repeated processing
+    files_data = []
+    for uf in uploaded_files:
+        uf.seek(0)
+        files_data.append(uf.read())
+
+    preview_image = np.array(PILImage.open(io.BytesIO(files_data[0])).convert("RGBA"))
 
     st.subheader("処理プレビュー（1枚目）")
     image = preview_image
@@ -98,9 +103,9 @@ if uploaded_files:
     if st.button("すべての画像を処理"):
         zip_buffer = io.BytesIO()
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zf:
-            for file in uploaded_files:
+            for file, data in zip(uploaded_files, files_data):
                 name = os.path.splitext(file.name)[0] + ".png"
-                img = np.array(PILImage.open(file).convert("RGBA"))
+                img = np.array(PILImage.open(io.BytesIO(data)).convert("RGBA"))
                 if bg_transparency:
                     img = np.array(BackgroundTransparency_func(PILImage.fromarray(img)).convert("RGBA"))
                 if justification:
@@ -113,4 +118,9 @@ if uploaded_files:
                 output_image.save(buffer, format="PNG")
                 zf.writestr(name, buffer.getvalue())
         zip_buffer.seek(0)
-        st.download_button("ZIPをダウンロード", data=zip_buffer, file_name="processed_images.zip", mime="application/zip")
+        st.download_button(
+            "ZIPをダウンロード",
+            data=zip_buffer.getvalue(),
+            file_name="processed_images.zip",
+            mime="application/zip",
+        )
