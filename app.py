@@ -81,6 +81,7 @@ bottom_padding = st.sidebar.slider("下パディング (%)", 0, 100, 25, 5)
 
 if uploaded_files:
     preview_file = uploaded_files[0]
+    preview_file.seek(0)
     preview_image = np.array(PILImage.open(preview_file).convert("RGBA"))
 
     st.subheader("処理プレビュー（1枚目）")
@@ -100,6 +101,7 @@ if uploaded_files:
         with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zf:
             for file in uploaded_files:
                 name = os.path.splitext(file.name)[0] + ".png"
+                file.seek(0)
                 img = np.array(PILImage.open(file).convert("RGBA"))
                 if bg_transparency:
                     img = np.array(BackgroundTransparency_func(PILImage.fromarray(img)).convert("RGBA"))
