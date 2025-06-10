@@ -7,13 +7,13 @@ from PIL import Image as PILImage
 from rembg import remove, new_session
 import streamlit as st
 
-# 事前に軽く1回だけ使ってモデルをキャッシュさせる
-def preload_u2net_model():
-    dummy = PILImage.new("RGB", (10, 10), (255, 255, 255))
+# U^2-Net セッションを一度だけ初期化してキャッシュ
+@st.cache_resource
+def load_u2net_session():
     session = new_session("u2net")
-    remove(dummy, session=session)
-
-preload_u2net_model()
+    dummy = PILImage.new("RGB", (10, 10), (255, 255, 255))
+    remove(dummy, session=session)  # warm up
+    return session
 
 # === 処理関数 ===
 def adjust(image, alpha, gamma):
@@ -27,8 +27,7 @@ def adjust_beta(image, beta):
     return np.clip(dst, 0, 255).astype(np.uint8)
 
 def BackgroundTransparency_func(image):
-    model_name = 'u2net'
-    session = new_session(model_name)
+    session = load_u2net_session()
     output = remove(image, session=session)
     return output
 
@@ -65,18 +64,20 @@ def Justification_func(image, top_padding, bottom_padding):
 # === Streamlit UI ===
 st.title("画像一括処理アプリ")
 
-uploaded_files = st.file_uploader("画像を1枚以上選択してください", type=["png", "jpg", "jpeg"], accept_multiple_files=True)
+uploaded_files = st.file_uploader(
+    "画像を1枚以上選択してください",
+    type=["png", "jpg", "jpeg"],
+    accept_multiple_files=True,
+)
 
-col1, col2 = st.columns(2)
-with col1:
-    bg_transparency = st.checkbox("背景透過", value=True)
-    justification = st.checkbox("位置調整", value=True)
-with col2:
-    brightness = st.slider("明度", 0.0, 2.0, 1.3, 0.05)
-    contrast = st.slider("コントラスト", -100, 100, 25, 5)
-    gamma = st.slider("ガンマ補正", 0.0, 2.0, 1.0, 0.05)
-    top_padding = st.slider("上パディング (%)", 0, 100, 25, 5)
-    bottom_padding = st.slider("下パディング (%)", 0, 100, 25, 5)
+st.sidebar.header("オプション")
+bg_transparency = st.sidebar.checkbox("背景透過", value=True)
+justification = st.sidebar.checkbox("位置調整", value=True)
+brightness = st.sidebar.slider("明度", 0.0, 2.0, 1.3, 0.05)
+contrast = st.sidebar.slider("コントラスト", -100, 100, 25, 5)
+gamma = st.sidebar.slider("ガンマ補正", 0.1, 2.0, 1.0, 0.05)
+top_padding = st.sidebar.slider("上パディング (%)", 0, 100, 25, 5)
+bottom_padding = st.sidebar.slider("下パディング (%)", 0, 100, 25, 5)
 
 if uploaded_files:
     preview_file = uploaded_files[0]
