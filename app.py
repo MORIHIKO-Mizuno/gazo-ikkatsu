@@ -98,7 +98,8 @@ if uploaded_files:
 
     if st.button("すべての画像を処理"):
         zip_buffer = io.BytesIO()
-        with zipfile.ZipFile(zip_buffer, "a", zipfile.ZIP_DEFLATED) as zf:
+        # 新しいZIPを毎回作成するためモードは"w"を使用
+        with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zf:
             for file in uploaded_files:
                 name = os.path.splitext(file.name)[0] + ".png"
                 file.seek(0)
@@ -114,5 +115,12 @@ if uploaded_files:
                 buffer = io.BytesIO()
                 output_image.save(buffer, format="PNG")
                 zf.writestr(name, buffer.getvalue())
-        zip_buffer.seek(0)
-        st.download_button("ZIPをダウンロード", data=zip_buffer, file_name="processed_images.zip", mime="application/zip")
+        # st.download_button に BytesIO を直接渡すと状態によってはエラーになることが
+        # あるため、bytes に変換してから渡す
+        zip_bytes = zip_buffer.getvalue()
+        st.download_button(
+            "ZIPをダウンロード",
+            data=zip_bytes,
+            file_name="processed_images.zip",
+            mime="application/zip",
+        )
