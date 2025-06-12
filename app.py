@@ -80,6 +80,8 @@ top_padding = st.sidebar.slider("上パディング (%)", 0, 100, 25, 5)
 bottom_padding = st.sidebar.slider("下パディング (%)", 0, 100, 25, 5)
 
 if uploaded_files:
+    if "zip_bytes" not in st.session_state:
+        st.session_state["zip_bytes"] = None
     preview_file = uploaded_files[0]
     preview_file.seek(0)
     preview_image = np.array(PILImage.open(preview_file).convert("RGBA"))
@@ -115,12 +117,17 @@ if uploaded_files:
                 buffer = io.BytesIO()
                 output_image.save(buffer, format="PNG")
                 zf.writestr(name, buffer.getvalue())
+                buffer.close()
         # st.download_button に BytesIO を直接渡すと状態によってはエラーになることが
         # あるため、bytes に変換してから渡す
-        zip_bytes = zip_buffer.getvalue()
+        st.session_state["zip_bytes"] = zip_buffer.getvalue()
+        zip_buffer.close()
+
+    if st.session_state.get("zip_bytes"):
         st.download_button(
             "ZIPをダウンロード",
-            data=zip_bytes,
+            data=st.session_state["zip_bytes"],
             file_name="processed_images.zip",
             mime="application/zip",
+            key=f"download-{len(st.session_state['zip_bytes'])}",
         )
