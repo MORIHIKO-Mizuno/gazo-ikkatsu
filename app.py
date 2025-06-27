@@ -23,7 +23,7 @@ def adjust(image, alpha, gamma):
     return cv2.LUT(img_alpha, table).astype(np.uint8)
 
 def adjust_beta(image, beta):
-    dst = image + beta
+    dst = image.astype(np.int16) + int(beta)
     return np.clip(dst, 0, 255).astype(np.uint8)
 
 def BackgroundTransparency_func(image):
@@ -46,7 +46,7 @@ def Justification_func(image, top_padding, bottom_padding):
         new_top = max(0, top_most - top_padding_pixels)
         new_bottom = min(img_height, bottom_most + bottom_padding_pixels)
 
-        new_img_height = top_padding_pixels + (bottom_most - top_most) + bottom_padding_pixels
+        new_img_height = top_padding_pixels + (bottom_most - top_most + 1) + bottom_padding_pixels
         new_img_array = np.zeros((new_img_height, img_width, 4), dtype=np.uint8)
         new_img_array[top_padding_pixels:top_padding_pixels + (bottom_most - top_most) + 1, :, :] = img_array[top_most:bottom_most + 1, :, :]
 
