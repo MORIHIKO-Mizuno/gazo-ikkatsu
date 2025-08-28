@@ -4,6 +4,7 @@ import io
 import zipfile
 import numpy as np
 from PIL import Image as PILImage
+from PIL import ExifTags
 from rembg import remove, new_session
 import streamlit as st
 
@@ -23,8 +24,8 @@ def adjust(image, alpha, gamma):
     return cv2.LUT(img_alpha, table).astype(np.uint8)
 
 def adjust_beta(image, beta):
-    dst = image.astype(np.int16) + int(beta)
-    return np.clip(dst, 0, 255).astype(np.uint8)
+    img = image.astype(np.float32) + beta
+    return np.clip(img, 0, 255).astype(np.uint8)
 
 def BackgroundTransparency_func(image):
     session = load_u2net_session()
@@ -46,10 +47,13 @@ def Justification_func(image, top_padding, bottom_padding):
         new_top = max(0, top_most - top_padding_pixels)
         new_bottom = min(img_height, bottom_most + bottom_padding_pixels)
 
-        new_img_height = top_padding_pixels + (bottom_most - top_most + 1) + bottom_padding_pixels
+        crop_height = bottom_most - top_most + 1
+        new_img_height = top_padding_pixels + crop_height + bottom_padding_pixels
         new_img_array = np.zeros((new_img_height, img_width, 4), dtype=np.uint8)
-        new_img_array[top_padding_pixels:top_padding_pixels + (bottom_most - top_most) + 1, :, :] = img_array[top_most:bottom_most + 1, :, :]
 
+        new_img_array[top_padding_pixels:top_padding_pixels + crop_height, :, :] = \
+            img_array[top_most:bottom_most + 1, :, :]
+            
         new_img_width = int((new_img_height / img_height) * img_width)
         center_x = img_width // 2
         new_left = max(0, center_x - new_img_width // 2)
@@ -60,6 +64,54 @@ def Justification_func(image, top_padding, bottom_padding):
         final_img_array = img_array
 
     return final_img_array
+
+
+def correct_image_orientation(pil_img):
+    """
+    EXIFのOrientation情報に基づいて画像の回転を補正する
+    """
+    try:
+        exif = pil_img._getexif()
+        if exif is not None:
+            for tag, value in exif.items():
+                tag_name = ExifTags.TAGS.get(tag, tag)
+                if tag_name == 'Orientation':
+                    orientation = value
+                    if orientation == 3:
+                        pil_img = pil_img.rotate(180, expand=True)
+                    elif orientation == 6:
+                        pil_img = pil_img.rotate(270, expand=True)
+                    elif orientation == 8:
+                        pil_img = pil_img.rotate(90, expand=True)
+    except Exception as e:
+        print("EXIF 読み取り失敗:", e)
+    return pil_img
+
+
+def add_border(image: np.ndarray, border_size=5, color=(255, 255, 255)):
+    """
+    RGBA画像に枠線を追加
+    """
+    if image.shape[2] == 4:  # RGBA
+        rgb = image[:, :, :3]
+        alpha = image[:, :, 3:]
+    else:
+        rgb = image
+        alpha = None
+
+    bordered = cv2.copyMakeBorder(
+        rgb, border_size, border_size, border_size, border_size,
+        borderType=cv2.BORDER_CONSTANT, value=color
+    )
+
+    if alpha is not None:
+        alpha_bordered = cv2.copyMakeBorder(
+            alpha, border_size, border_size, border_size, border_size,
+            borderType=cv2.BORDER_CONSTANT, value=[255]
+        )
+        return np.dstack((bordered, alpha_bordered))
+    else:
+        return bordered
 
 # === Streamlit UI ===
 st.title("画像一括処理アプリ")
@@ -80,11 +132,17 @@ top_padding = st.sidebar.slider("上パディング (%)", 0, 100, 25, 5)
 bottom_padding = st.sidebar.slider("下パディング (%)", 0, 100, 25, 5)
 
 if uploaded_files:
-    preview_file = uploaded_files[0]
-    preview_file.seek(0)
-    preview_image = np.array(PILImage.open(preview_file).convert("RGBA"))
+    # === プレビュー対象の画像を選択 ===
+    file_names = [file.name for file in uploaded_files]
+    selected_name = st.selectbox("プレビューする画像を選んでください", file_names)
+    preview_file = next(file for file in uploaded_files if file.name == selected_name)
 
-    st.subheader("処理プレビュー（1枚目）")
+    preview_file.seek(0)
+    pil_image = PILImage.open(preview_file)
+    pil_image = correct_image_orientation(pil_image)
+    preview_image = np.array(pil_image.convert("RGBA"))
+
+    st.subheader(f"処理プレビュー（{selected_name}）")
     image = preview_image
     if bg_transparency:
         image = np.array(BackgroundTransparency_func(PILImage.fromarray(image)).convert("RGBA"))
@@ -94,7 +152,12 @@ if uploaded_files:
     adjusted = adjust_beta(image[:, :, :3], contrast)
     adjusted = adjust(adjusted, brightness, gamma)
     image_out = np.dstack((adjusted, image[:, :, 3]))
-    st.image(image_out, caption="処理済み画像", use_container_width=True)
+
+    # 枠の色を統一
+    preview_out = add_border(image_out, border_size=5, color=(236, 90, 83))
+
+    st.image(preview_out, caption="処理済み画像", use_container_width=True)
+
 
     if st.button("すべての画像を処理"):
         zip_buffer = io.BytesIO()
@@ -103,7 +166,9 @@ if uploaded_files:
             for file in uploaded_files:
                 name = os.path.splitext(file.name)[0] + ".png"
                 file.seek(0)
-                img = np.array(PILImage.open(file).convert("RGBA"))
+                pil_img = PILImage.open(file)
+                pil_img = correct_image_orientation(pil_img)
+                img = np.array(pil_img.convert("RGBA"))
                 if bg_transparency:
                     img = np.array(BackgroundTransparency_func(PILImage.fromarray(img)).convert("RGBA"))
                 if justification:
